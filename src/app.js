@@ -17,8 +17,14 @@ app.use(express.urlencoded({extended: true, limit : "16kb"}))
 
 app.use(cookieParser());
 
-app.get('/',(req,res) => {
-    res.send("HELLO NOTIFY");
-})
+// app.get('/',(req,res) => {
+//     res.send("HELLO NOTIFY");
+// })
+
+import userRouter from './routes/user.route.js'
+import noteRouter from './routes/note.route.js'
+
+app.use("/api/v1/users", userRouter)
+app.use("/api/v1/notes",noteRouter)
 
 export {app};

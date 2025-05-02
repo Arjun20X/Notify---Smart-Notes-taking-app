@@ -17,7 +17,7 @@ const noteSchema = new mongoose.Schema(
         owner : {
             type : mongoose.Schema.Types.ObjectId,
             ref : "USer",
-            required : true,
+            // required : true,
         }
     },{timestamps : true}
 )
