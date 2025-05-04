@@ -4,6 +4,9 @@ import { ApiError } from "../utils/ApiError.js";
 import {Note} from "../models/note.model.js";
 
 const createNote = asyncHandler(async(req,res) => {
+
+    const user = req.user;
+
     const {title, content, tags} = req.body;
 
     if(!title || !content){
@@ -14,6 +17,7 @@ const createNote = asyncHandler(async(req,res) => {
         title,
         content,
         tags,
+        owner : user._id,
     })
 
     if(!note){
@@ -25,6 +29,11 @@ const createNote = asyncHandler(async(req,res) => {
     .json(new ApiResponse(200, note , "Note created successfully")) ;
 
 })
+
+
+// const getNote = asyncHandler(async(req,res) => {
+
+// })
 
 export {
     createNote
