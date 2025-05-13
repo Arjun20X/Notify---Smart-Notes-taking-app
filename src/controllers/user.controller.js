@@ -2,6 +2,10 @@ import { User } from "../models/user.model.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
+import bcrypt from "bcrypt";
+import { OtpToken } from "../models/OtpToken.model.js";
+import { generateOtp, getExpiry } from "../services/otpService.js";
+import { sendOtpMail } from "../utils/mailer.js";
 
 
 // this function genrates the refresh and accesstoken 
@@ -25,7 +29,7 @@ const generateAccessAndRefreshToken = async (userId) => {
 }
 
 
-const registerUser = asyncHandler(async(req,res) => {
+const sendOtpForRegistration = asyncHandler(async(req,res) => {
     const {fullname, email, password} = req.body;
     // console.log("Printing User : ", req.body);
 
@@ -43,27 +47,77 @@ const registerUser = asyncHandler(async(req,res) => {
         throw new ApiError(409, "User with this email already exists");      
       }
 
-      const user = await User.create({
-        fullname,
-        email,
-        password,
-      })
+      const otpCode = generateOtp();
+      const hashedOtp = await bcrypt.hash(otpCode,10);
 
-        const createdUser = await User.findById(user._id).select(
-          "-password -refreshToken"
-        );
+      await OtpToken.findOneAndUpdate(
+        { email },
+        {
+          fullname,
+          email,
+          otp: hashedOtp,
+          password,
+          expiry : getExpiry(),
+        },
+        { upsert: true, new: true, runValidators: true }
+      );
 
-          if (!createdUser) {
-            throw new ApiError(
-              500,
-              "Something went wrong while registering the user"
-            );
-          }
 
-          return res
-          .status(201).json(
-            new ApiResponse(200,createdUser, "User registered Successfully")
-          )
+      await sendOtpMail(email, otpCode);
+
+      res.status(200)
+      .json(new ApiResponse(200, otpCode, "OTP sent successfully to your email"));
+
+      
+})
+
+
+const verifyOtpAndRegister = asyncHandler(async (req,res) => {
+    const {email,otp} = req.body;
+
+    const otpRecord = await OtpToken.findOne({email});
+    if(!otpRecord){
+      throw new ApiError(400,"OTP expired or not requested");
+    }
+
+    const {fullname,password} = otpRecord;
+
+    if (otpRecord.expiry < Date.now()) {
+      await OtpToken.deleteOne({ email });
+      throw new ApiError(400, "OTP expired");
+    }
+
+    const isOtpValid = await bcrypt.compare(otp, otpRecord.otp);
+    if(!isOtpValid){
+      throw new ApiError(400, " Invalid OTP");
+    }
+
+
+
+    const user = await User.create({
+      fullname,
+      email,
+      password,
+    });
+
+    await OtpToken.deleteOne({ email });
+
+    const createdUser = await User.findById(user._id).select(
+      "-password -refreshToken"
+    );
+
+    if (!createdUser) {
+      throw new ApiError(
+        500,
+        "Something went wrong while registering the user"
+      );
+    }
+
+    return res
+      .status(201)
+      .json(new ApiResponse(200, createdUser, "User registered Successfully"));
+
+
 })
 
 
@@ -141,7 +195,8 @@ const logoutUser = asyncHandler(async (req,res) => {
 
 
 export {
-  registerUser,
+  sendOtpForRegistration,
+  verifyOtpAndRegister,
   loginUser,
   logoutUser
 }
